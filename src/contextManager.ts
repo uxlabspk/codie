@@ -80,7 +80,41 @@ export class ContextManager {
   }
 
   getMessagesForRequest(): ChatMessage[] {
-    return [this.systemPrompt, ...this.history];
+    const messages: ChatMessage[] = [this.systemPrompt, ...this.history];
+    return this.ensureUserMessagePresent(messages);
+  }
+
+  /**
+   * Guard: every request sent to the model must contain at least one user message,
+   * otherwise most chat templates (including multi-step tool templates) throw a
+   * 400 "No user query found in messages" error.
+   *
+   * If the assembled messages have no user turn, synthesise a minimal one so the
+   * model can respond. This handles edge cases where compaction or deep reset
+   * leaves history as [systemMsg, systemMsg, toolMsg, ...] with no user turn.
+   */
+  private ensureUserMessagePresent(messages: ChatMessage[]): ChatMessage[] {
+    const hasUser = messages.some((m) => m.role === "user");
+    if (hasUser) return messages;
+
+    // Find the last assistant message content to use as context for the synthetic user message
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    const syntheticContent = lastAssistant
+      ? "Please continue with the task."
+      : "Please continue.";
+
+    return [...messages, { role: "user", content: syntheticContent }];
+  }
+
+  /**
+   * Same guarantee but for raw history arrays (without the leading system prompt).
+   * Used after compaction to ensure history always has a user message before
+   * being stored, so getMessagesForRequest never has to synthesise one.
+   */
+  private ensureHistoryHasUserMessage(history: ChatMessage[]): ChatMessage[] {
+    const hasUser = history.some((m) => m.role === "user");
+    if (hasUser) return history;
+    return [...history, { role: "user", content: "Please continue with the task." }];
   }
 
   getHistory(): ChatMessage[] {
@@ -139,7 +173,8 @@ export class ContextManager {
       const afterPruneTokens = await this.client.countMessageTokens(afterPruneMessages);
 
       if (afterPruneTokens <= safeBudget) {
-        this.history = [...withoutToolMessages, ...recent];
+        const pruned = [...withoutToolMessages, ...recent];
+        this.history = this.ensureHistoryHasUserMessage(pruned);
         return { compacted: true, removedCount: toSummarize.length - withoutToolMessages.length };
       }
 
@@ -150,7 +185,8 @@ export class ContextManager {
         content: `[Conversation summary of earlier turns, compacted to save context]\n${summaryText}`,
       };
 
-      this.history = [summaryMessage, ...recent];
+      const afterSummary = [summaryMessage, ...recent];
+      this.history = this.ensureHistoryHasUserMessage(afterSummary);
 
       // Re-check if summarization was enough
       const afterSummaryTokens = await this.client.countMessageTokens(this.getMessagesForRequest());
