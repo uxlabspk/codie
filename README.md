@@ -1,4 +1,4 @@
-# llama-agent
+# codie
 
 A local, agentic coding CLI for `llama.cpp`'s `llama-server`, built with **Ink (React for
 terminals)**. It has automatic context compaction so the server never fails when the
@@ -57,7 +57,7 @@ or after a global link:
 
 ```bash
 npm link
-llama-agent --url http://localhost:8080
+codie --url http://localhost:8080
 ```
 
 ## UI
@@ -83,13 +83,13 @@ llama-agent --url http://localhost:8080
 | `/clear`     | Wipe current history (keeps system prompt)           |
 | `/exit`      | Save and quit                                        |
 
-Sessions auto-save after every turn to `~/.llama-agent/sessions/<name>.json`, so a crash
+Sessions auto-save after every turn to `~/.codie/sessions/<name>.json`, so a crash
 or Ctrl+C doesn't lose your work — resume with `--session <name>`.
 
 ## Tuning compaction
 
 ```bash
-llama-agent --keep-recent 8 --max-tokens 3072
+codie --keep-recent 8 --max-tokens 3072
 ```
 
 - `--keep-recent`: how many raw messages stay verbatim before older ones get summarized.

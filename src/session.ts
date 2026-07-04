@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import type { ChatMessage } from "./llamaClient.js";
 
-const SESSION_DIR = path.join(os.homedir(), ".llama-agent", "sessions");
+const SESSION_DIR = path.join(os.homedir(), ".codie", "sessions");
 
 export async function ensureSessionDir() {
   await fs.mkdir(SESSION_DIR, { recursive: true });

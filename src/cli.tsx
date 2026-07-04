@@ -17,7 +17,7 @@ markdown when helpful (code blocks, lists, headers).`;
 
 const program = new Command();
 program
-  .name("llama-agent")
+  .name("codie")
   .description("Local agentic coding CLI for llama.cpp servers with automatic context compaction")
   .option("-u, --url <url>", "llama-server base URL", "http://localhost:8080")
   .option("-s, --session <name>", "session name to load/save", "default")
@@ -58,7 +58,7 @@ async function main() {
 
   setToolLogSink((kind, text) => handle.addEntry(kind, text));
 
-  handle.addEntry("info", `llama-agent → ${opts.url}`);
+  handle.addEntry("info", `codie → ${opts.url}`);
 
   const healthy = await client.health();
   if (!healthy) {

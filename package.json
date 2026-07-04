@@ -1,10 +1,10 @@
 {
-  "name": "llama-agent",
+  "name": "codie",
   "version": "0.2.0",
-  "description": "Local agentic CLI for llama.cpp server with automatic context compaction, built with Ink/React",
+  "description": "Local agentic coding CLI for llama.cpp server with automatic context compaction, built with Ink/React",
   "type": "module",
   "bin": {
-    "llama-agent": "./dist/cli.js"
+    "codie": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p .",
