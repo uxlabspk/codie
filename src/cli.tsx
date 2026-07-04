@@ -9,6 +9,8 @@ import { ContextManager } from "./contextManager.js";
 import { toolDefs, executeTool, setToolLogSink } from "./tools.js";
 import { saveSession, loadSession, listSessions } from "./session.js";
 import { App, type AppHandle } from "./App.js";
+import instances from "../node_modules/ink/build/instances.js";
+
 
 const SYSTEM_PROMPT = `You are a local coding agent running against the user's own model via llama.cpp.
 You can read/write/edit files, list directories, search file contents, and run shell commands using the
@@ -74,7 +76,7 @@ async function main() {
   // defensively no-op'ing handleInput if ctxMgr somehow isn't ready yet.
   let ctxMgr: ContextManager | undefined;
 
-  const { waitUntilExit } = render(
+  const { waitUntilExit, clear } = render(
     React.createElement(App, {
       cwd,
       initialUsage: { used: 0, budget: 0, ctxSize: 0, pct: 0 },
@@ -82,6 +84,20 @@ async function main() {
       onReady: (h: AppHandle) => resolveHandle(h),
     })
   );
+
+  if (!process.env["CI"]) {
+    process.stdout.prependListener("resize", () => {
+      const inkInstance = (instances as any).get(process.stdout);
+      if (inkInstance) {
+        clear();
+        process.stdout.write("\u001b[2J\u001b[3J\u001b[H");
+        if (inkInstance.fullStaticOutput) {
+          process.stdout.write(inkInstance.fullStaticOutput);
+        }
+      }
+    });
+  }
+
 
   const handle = await handleReady;
   handle.setBusy(true, "starting up");
