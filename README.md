@@ -78,6 +78,7 @@ codie --url http://localhost:8080
 |--------------|------------------------------------------------------|
 | `/usage`     | Show current token usage vs. budget                  |
 | `/compact`   | Force compaction now                                 |
+| `/memory`    | Show the current session memory file (info.md)       |
 | `/save`      | Save session to disk                                 |
 | `/sessions`  | List saved sessions                                  |
 | `/clear`     | Wipe current history (keeps system prompt)           |

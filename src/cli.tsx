@@ -2,6 +2,8 @@
 import React from "react";
 import { render } from "ink";
 import { Command } from "commander";
+import path from "node:path";
+import fs from "node:fs/promises";
 import { LlamaClient } from "./llamaClient.js";
 import { ContextManager } from "./contextManager.js";
 import { toolDefs, executeTool, setToolLogSink } from "./tools.js";
@@ -92,17 +94,29 @@ async function main() {
   const ctxSize = await client.getContextSize();
   handle.addEntry("info", `context size: ${ctxSize} tokens`);
 
+  // Session memory lives in <cwd>/.codie/<session>/info.md so it's project-local
+  const sessionMemoryDir = path.join(cwd, ".codie", opts.session);
+  const sessionMemoryPath = path.join(sessionMemoryDir, "info.md");
+  await fs.mkdir(sessionMemoryDir, { recursive: true });
+
   ctxMgr = new ContextManager(client, SYSTEM_PROMPT, {
     reserveForResponse: parseInt(opts.maxTokens, 10),
     keepRecentTurns: parseInt(opts.keepRecent, 10),
+    sessionMemoryPath,
   });
 
   const existing = await loadSession(opts.session);
   if (existing && existing.length > 0) {
     ctxMgr.setHistory(existing);
     handle.addEntry("info", `resumed session "${opts.session}" (${existing.length} messages)`);
+  } else {
+    // Fresh session — inject prior memory if it exists
+    const hadMemory = await ctxMgr.loadMemoryIfExists();
+    if (hadMemory) {
+      handle.addEntry("info", `📝 loaded session memory from ${sessionMemoryPath}`);
+    }
   }
-  handle.addEntry("info", `commands: /compact  /usage  /save  /sessions  /clear  /exit`);
+  handle.addEntry("info", `commands: /compact  /memory  /usage  /save  /sessions  /clear  /exit`);
 
   handle.setBusy(false);
   await refreshStatus();
@@ -137,11 +151,29 @@ async function main() {
     if (trimmed === "/compact") {
       handle.addEntry("info", "compacting...");
       const result = await ctxMgr.ensureFits();
-      handle.addEntry(
-        "info",
-        result.compacted ? `compacted ${result.removedCount} messages into a summary` : "nothing to compact yet"
-      );
+      if (!result.compacted) {
+        handle.addEntry("info", "nothing to compact yet");
+      } else if (result.deepReset) {
+        handle.addEntry("info", `🧠 deep reset — memory saved to ${result.memoryPath}, history cleared`);
+      } else {
+        handle.addEntry("info", `⚙ compacted ${result.removedCount} messages`);
+      }
       await refreshStatus();
+      return;
+    }
+
+    if (trimmed === "/memory") {
+      const memPath = ctxMgr.getMemoryPath();
+      if (!memPath) {
+        handle.addEntry("info", "no session memory path configured");
+        return;
+      }
+      try {
+        const content = await fs.readFile(memPath, "utf-8");
+        handle.addEntry("info", `📝 memory file (${memPath}):\n\n${content}`);
+      } catch {
+        handle.addEntry("info", `no memory file yet — will be created automatically when context fills up`);
+      }
       return;
     }
 
@@ -196,7 +228,11 @@ async function main() {
 
     const compaction = await ctx.ensureFits();
     if (compaction.compacted) {
-      handle.addEntry("info", `⚙ context was getting full — auto-compacted ${compaction.removedCount} older messages`);
+      if (compaction.deepReset) {
+        handle.addEntry("info", `🧠 context window full — deep reset performed, memory saved to ${compaction.memoryPath}`);
+      } else {
+        handle.addEntry("info", `⚙ context was getting full — auto-compacted ${compaction.removedCount} older messages`);
+      }
     }
 
     handle.setBusy(true, "thinking");
