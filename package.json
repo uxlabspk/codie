@@ -1,0 +1,33 @@
+{
+  "name": "llama-agent",
+  "version": "0.2.0",
+  "description": "Local agentic CLI for llama.cpp server with automatic context compaction, built with Ink/React",
+  "type": "module",
+  "bin": {
+    "llama-agent": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.tsx"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "cli-markdown": "^3.4.0",
+    "commander": "^12.1.0",
+    "diff": "^5.2.0",
+    "gpt-tokenizer": "^2.5.1",
+    "ink": "^5.0.1",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "node-fetch": "^3.3.2",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/diff": "^5.2.1",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}
