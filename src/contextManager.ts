@@ -81,7 +81,40 @@ export class ContextManager {
     const toSummarize = this.history.slice(0, cutoff);
     const recent = this.history.slice(cutoff);
 
-    const summaryText = await this.summarize(toSummarize);
+    // Drop tool result messages and their paired assistant tool-call messages
+    // from the region being compacted — they're ephemeral observations and
+    // summarizing them wastes tokens. The model already processed that info
+    // when it was live; old raw file contents in history add noise, not value.
+    const toolCallIds = new Set<string>();
+    for (const m of toSummarize) {
+      if (m.role === "tool") {
+        if (m.tool_call_id) toolCallIds.add(m.tool_call_id);
+      }
+    }
+    const withoutToolMessages = toSummarize.filter((m) => {
+      if (m.role === "tool") return false;
+      if (m.role === "assistant" && m.tool_calls?.length) {
+        // Drop assistant message only if ALL its tool calls are being pruned
+        const allPruned = m.tool_calls.every((tc) => toolCallIds.has(tc.id));
+        return !allPruned;
+      }
+      return true;
+    });
+
+    // If pruning alone freed enough space, skip the summarization LLM call
+    const afterPruneMessages = [this.systemPrompt, ...withoutToolMessages, ...recent];
+    const afterPruneTokens = await this.client.countMessageTokens(afterPruneMessages);
+    const ctxSize2 = await this.client.getContextSize();
+    const budget2 = ctxSize2 - this.reserveForResponse - toolsTokenEstimate;
+    const safeBudget2 = Math.floor(budget2 * this.safetyMarginRatio);
+
+    if (afterPruneTokens <= safeBudget2) {
+      this.history = [...withoutToolMessages, ...recent];
+      return { compacted: true, removedCount: toSummarize.length - withoutToolMessages.length };
+    }
+
+    // Still too large — summarize the non-tool portion
+    const summaryText = await this.summarize(withoutToolMessages.length > 0 ? withoutToolMessages : toSummarize);
     const summaryMessage: ChatMessage = {
       role: "system",
       content: `[Conversation summary of earlier turns, compacted to save context]\n${summaryText}`,

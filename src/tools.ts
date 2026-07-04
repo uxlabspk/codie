@@ -110,6 +110,23 @@ export const toolDefs: ToolDef[] = [
   {
     type: "function",
     function: {
+      name: "read_file_outline",
+      description:
+        "Get a compact outline of a source file: function/class/method signatures with line numbers, " +
+        "without reading the full file contents. Use this first to understand a file's structure, " +
+        "then use read_file with start_line/end_line to read only the sections you need.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative file path" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "run_shell_command",
       description: "Execute a shell command in the working directory. Use for running tests, builds, git, etc.",
       parameters: {
@@ -122,6 +139,18 @@ export const toolDefs: ToolDef[] = [
     },
   },
 ];
+
+const TOOL_RESULT_CHAR_LIMIT = 8000;
+
+function truncateResult(result: string, toolName: string): string {
+  if (result.length <= TOOL_RESULT_CHAR_LIMIT) return result;
+  const kept = result.slice(0, TOOL_RESULT_CHAR_LIMIT);
+  const dropped = result.length - TOOL_RESULT_CHAR_LIMIT;
+  return (
+    kept +
+    `\n\n[... truncated ${dropped} chars — use read_file with start_line/end_line or a more specific search to see more]`
+  );
+}
 
 export async function executeTool(name: string, argsJson: string): Promise<string> {
   let args: any;
@@ -140,15 +169,21 @@ export async function executeTool(name: string, argsJson: string): Promise<strin
           const lines = content.split("\n");
           const start = (args.start_line ?? 1) - 1;
           const end = args.end_line ?? lines.length;
-          return lines
-            .slice(start, end)
-            .map((l, i) => `${start + i + 1}: ${l}`)
-            .join("\n");
+          return truncateResult(
+            lines
+              .slice(start, end)
+              .map((l, i) => `${start + i + 1}: ${l}`)
+              .join("\n"),
+            name
+          );
         }
-        return content
-          .split("\n")
-          .map((l, i) => `${i + 1}: ${l}`)
-          .join("\n");
+        return truncateResult(
+          content
+            .split("\n")
+            .map((l, i) => `${i + 1}: ${l}`)
+            .join("\n"),
+          name
+        );
       }
 
       case "write_file": {
@@ -181,10 +216,10 @@ export async function executeTool(name: string, argsJson: string): Promise<strin
         const dir = resolveSafe(args.path ?? ".");
         if (args.recursive) {
           const { stdout } = await execAsync(`find "${dir}" -not -path '*/node_modules/*' -not -path '*/.git/*'`);
-          return stdout;
+          return truncateResult(stdout, name);
         }
         const entries = await fs.readdir(dir, { withFileTypes: true });
-        return entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).join("\n");
+        return truncateResult(entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).join("\n"), name);
       }
 
       case "search_files": {
@@ -192,13 +227,62 @@ export async function executeTool(name: string, argsJson: string): Promise<strin
         const { stdout } = await execAsync(
           `grep -rn --exclude-dir=node_modules --exclude-dir=.git ${JSON.stringify(args.pattern)} "${dir}" || true`
         );
-        return stdout || "(no matches)";
+        return truncateResult(stdout || "(no matches)", name);
+      }
+
+      case "read_file_outline": {
+        const p = resolveSafe(args.path);
+        const content = await fs.readFile(p, "utf-8");
+        const lines = content.split("\n");
+        const ext = path.extname(args.path).toLowerCase();
+
+        // Patterns that indicate a meaningful declaration line worth surfacing
+        const patterns: RegExp[] = [
+          // TypeScript / JavaScript
+          /^\s*(export\s+)?(async\s+)?function\s+\w+/,
+          /^\s*(export\s+)?(default\s+)?(abstract\s+)?class\s+\w+/,
+          /^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(/,
+          /^\s*(export\s+)?(const|let|var)\s+\w+\s*:\s*\w+/,
+          /^\s*(public|private|protected|static|async|readonly).*\w+\s*[(<]/,
+          /^\s*(export\s+)?interface\s+\w+/,
+          /^\s*(export\s+)?type\s+\w+\s*=/,
+          /^\s*(export\s+)?enum\s+\w+/,
+          // Python
+          /^\s*def\s+\w+/,
+          /^\s*class\s+\w+/,
+          /^\s*async\s+def\s+\w+/,
+          // Rust
+          /^\s*(pub\s+)?(async\s+)?fn\s+\w+/,
+          /^\s*(pub\s+)?struct\s+\w+/,
+          /^\s*(pub\s+)?enum\s+\w+/,
+          /^\s*(pub\s+)?trait\s+\w+/,
+          /^\s*(pub\s+)?impl(\s+\w+)?\s+/,
+          // Go
+          /^\s*func\s+(\(\w+\s+\*?\w+\)\s+)?\w+\s*\(/,
+          /^\s*type\s+\w+\s+(struct|interface)/,
+        ];
+
+        const outline: string[] = [];
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (patterns.some((re) => re.test(line))) {
+            // Trim trailing { or : and whitespace for compactness
+            const trimmed = line.replace(/\s*[{:]\s*$/, "").trimEnd();
+            outline.push(`${i + 1}: ${trimmed}`);
+          }
+        }
+
+        if (outline.length === 0) {
+          return `No recognizable declarations found in ${args.path}. Use read_file to read it directly.`;
+        }
+
+        return `Outline of ${args.path} (${lines.length} lines total):\n${outline.join("\n")}`;
       }
 
       case "run_shell_command": {
         log("tool", `$ ${args.command}`);
         const { stdout, stderr } = await execAsync(args.command, { cwd: CWD, timeout: 60_000 });
-        return `stdout:\n${stdout}\nstderr:\n${stderr}`;
+        return truncateResult(`stdout:\n${stdout}\nstderr:\n${stderr}`, name);
       }
 
       default:

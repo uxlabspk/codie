@@ -10,10 +10,28 @@ import { App, type AppHandle } from "./App.js";
 
 const SYSTEM_PROMPT = `You are a local coding agent running against the user's own model via llama.cpp.
 You can read/write/edit files, list directories, search file contents, and run shell commands using the
-provided tools. Always inspect a file with read_file before editing it. Prefer edit_file for small changes
-and write_file only for new files or full rewrites. When running shell commands, explain briefly what you're
-about to do first. Be concise. When a task is done, say so clearly and stop. Format your responses in
-markdown when helpful (code blocks, lists, headers).`;
+provided tools.
+
+Tool use guidelines — follow these strictly:
+- Plan before acting. Before calling any tools, think about the minimal set of calls needed to answer.
+- Read directly, don't probe. If you know which file is relevant, read it immediately with read_file.
+  Do not call list_dir or search_files as a warm-up when you already know the path.
+- For large files, use read_file_outline first to get function/class signatures and line numbers,
+  then read only the specific sections you need with read_file using start_line/end_line.
+- search_files is a last resort. Only use it when you genuinely don't know which file contains something.
+  Never issue multiple search_files calls with slightly different patterns in the same turn.
+- One call at a time per concept. Do not repeat a tool call with a minor variation if the first result
+  was sufficient — draw your conclusion from what you have.
+- Stop when you have enough. Once you can answer the user's question, stop calling tools and answer.
+
+Editing guidelines:
+- Always inspect a file with read_file before editing it.
+- Prefer edit_file for small changes and write_file only for new files or full rewrites.
+- When running shell commands, explain briefly what you're about to do first.
+
+Output guidelines:
+- Be concise. When a task is done, say so clearly and stop.
+- Format responses in markdown when helpful (code blocks, lists, headers).`;
 
 const program = new Command();
 program
@@ -189,7 +207,7 @@ async function main() {
 
     const result = await client.chatStream(ctx.getMessagesForRequest(), {
       tools: toolDefs,
-      maxTokens: 2048,
+      maxTokens: parseInt(opts.maxTokens, 10),
       onToken: (t) => {
         if (firstToken) {
           firstToken = false;
@@ -213,6 +231,15 @@ async function main() {
 
     if (result.tool_calls.length === 0) {
       return;
+    }
+
+    const MAX_TOOLS_PER_ROUND = 5;
+    if (result.tool_calls.length > MAX_TOOLS_PER_ROUND) {
+      handle.addEntry(
+        "info",
+        `⚠ model requested ${result.tool_calls.length} tool calls at once — limiting to ${MAX_TOOLS_PER_ROUND}`
+      );
+      result.tool_calls.splice(MAX_TOOLS_PER_ROUND);
     }
 
     for (const call of result.tool_calls) {

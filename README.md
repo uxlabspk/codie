@@ -103,7 +103,7 @@ src/
   llamaClient.ts       — OpenAI-compatible client for llama-server (/v1/chat/completions,
                           /tokenize, /props), streaming + tool call parsing
   contextManager.ts    — token budget tracking + auto-summarization/compaction
-  tools.ts             — read_file, write_file, edit_file, list_dir, search_files,
+  tools.ts             — read_file, read_file_outline, write_file, edit_file, list_dir, search_files,
                           run_shell_command implementations + JSON schemas
   session.ts           — save/resume conversations to disk
   markdown.ts           — markdown → ANSI rendering, hardened against terminal-size
