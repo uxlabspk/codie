@@ -230,8 +230,23 @@ async function main() {
    * above has confirmed initialization finished.
    */
   async function runAgentTurn(ctx: ContextManager, depth = 0) {
-    if (depth > 8) {
-      handle.addEntry("error", "(stopping: too many chained tool calls)");
+    // After many chained rounds, stop passing tools to the model so it is
+    // forced to give a final answer with what it has — rather than aborting
+    // the whole turn with an error. 20 rounds is enough for any real task.
+    const SOFT_LIMIT = 12;
+    const HARD_LIMIT = 20;
+
+    if (depth >= HARD_LIMIT) {
+      // Absolute safety cap — should never be hit in practice
+      handle.addEntry("info", `⚠ reached ${HARD_LIMIT} tool-call rounds, wrapping up`);
+      // One final call with no tools so the model summarises what it did
+      const finalResult = await client.chatStream(ctx.getMessagesForRequest(), {
+        maxTokens: parseInt(opts.maxTokens, 10),
+        onToken: (t) => handle.setStreamingText((handle as any)._streamingText + t),
+      });
+      handle.setStreamingText(null);
+      if (finalResult.content.trim()) handle.addEntry("assistant", finalResult.content);
+      ctx.push({ role: "assistant", content: finalResult.content });
       return;
     }
 
@@ -239,6 +254,9 @@ async function main() {
     if (compaction.compacted) {
       if (compaction.deepReset) {
         handle.addEntry("info", `🧠 context window full — deep reset performed, memory saved to ${compaction.memoryPath}`);
+        // History is now [memoryMsg, lastUserMsg]. Reset depth so the agent
+        // continues with a fresh round counter instead of hitting the soft limit.
+        return await runAgentTurn(ctx, 0);
       } else {
         handle.addEntry("info", `⚙ context was getting full — auto-compacted ${compaction.removedCount} older messages`);
       }
@@ -248,15 +266,17 @@ async function main() {
     handle.setStreamingText(null);
 
     let fullText = "";
-    let firstToken = true;
+
+    // At soft limit, withdraw tools so the model must answer, not keep calling
+    const toolsForThisRound = depth >= SOFT_LIMIT ? undefined : toolDefs;
+    if (depth === SOFT_LIMIT) {
+      handle.addEntry("info", `⚠ many tool rounds completed — asking model to wrap up`);
+    }
 
     const result = await client.chatStream(ctx.getMessagesForRequest(), {
-      tools: toolDefs,
+      tools: toolsForThisRound,
       maxTokens: parseInt(opts.maxTokens, 10),
       onToken: (t) => {
-        if (firstToken) {
-          firstToken = false;
-        }
         fullText += t;
         handle.setStreamingText(fullText);
       },

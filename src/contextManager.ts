@@ -8,6 +8,7 @@ export interface CompactionResult {
   removedCount?: number;
   summaryTokens?: number;
   memoryPath?: string;
+  reinjectedUserMessage?: ChatMessage; // set when deepReset re-injects the last user message
 }
 
 /**
@@ -175,14 +176,27 @@ export class ContextManager {
     const memoryContent = await this.generateMemory();
     const memoryPath = await this.writeMemory(memoryContent);
 
+    // Find the last user message so we can re-inject it after the reset.
+    // Without it the history would be [systemPrompt, memoryMsg] with no user
+    // turn, which causes most model chat templates to reject the request.
+    const lastUserMessage = [...this.history].reverse().find((m) => m.role === "user");
+
     const memoryMessage: ChatMessage = {
       role: "system",
       content: `[Persistent session memory — context window was reset to stay within limits]\n${memoryContent}`,
     };
 
-    this.history = [memoryMessage];
+    // Fresh history: memory note + last user message so the model can continue
+    this.history = lastUserMessage
+      ? [memoryMessage, lastUserMessage]
+      : [memoryMessage];
 
-    return { compacted: true, deepReset: true, memoryPath };
+    return {
+      compacted: true,
+      deepReset: true,
+      memoryPath,
+      reinjectedUserMessage: lastUserMessage,
+    };
   }
 
   /**
