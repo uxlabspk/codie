@@ -30,10 +30,20 @@ Editing guidelines:
 - Always inspect a file with read_file before editing it.
 - Prefer edit_file for small changes and write_file only for new files or full rewrites.
 - When running shell commands, explain briefly what you're about to do first.
+- write_file's "content" argument is a JSON string. Any literal double-quote (") or backslash (\\)
+  inside the file content MUST be escaped as \\" or \\\\, and raw newlines must be \\n. If a file
+  contains long CSS/JS/HTML with quotes, be careful to escape every one of them — a single
+  unescaped quote will corrupt the whole tool call and the file will fail to write.
 
 Output guidelines:
 - Be concise. When a task is done, say so clearly and stop.
 - Format responses in markdown when helpful (code blocks, lists, headers).`;
+
+const TOOL_JSON_PARSE_ERROR_PATTERNS = [
+  /Failed to parse tool call arguments as JSON/i,
+  /invalid string: missing closing quote/i,
+  /parse_error\.101/i,
+];
 
 const program = new Command();
 program
@@ -80,7 +90,7 @@ async function main() {
 
   handle.addEntry("info", [
     "",
-    "  ██████╗ ██████╗ ██████╗ ██╗███████╗",
+    "   ██████╗ ██████╗ ██████╗ ██╗███████╗",
     "  ██╔════╝██╔═══██╗██╔══██╗██║██╔════╝",
     "  ██║     ██║   ██║██║  ██║██║█████╗  ",
     "  ██║     ██║   ██║██║  ██║██║██╔══╝  ",
@@ -273,14 +283,61 @@ async function main() {
       handle.addEntry("info", `⚠ many tool rounds completed — asking model to wrap up`);
     }
 
-    const result = await client.chatStream(ctx.getMessagesForRequest(), {
-      tools: toolsForThisRound,
-      maxTokens: parseInt(opts.maxTokens, 10),
-      onToken: (t) => {
-        fullText += t;
-        handle.setStreamingText(fullText);
-      },
-    });
+    const requestMessages = ctx.getMessagesForRequest();
+
+    async function streamAssistantResponse(messages: typeof requestMessages, includeTools: boolean) {
+      return await client.chatStream(messages, {
+        tools: includeTools ? toolsForThisRound : undefined,
+        maxTokens: parseInt(opts.maxTokens, 10),
+        onToken: (t) => {
+          fullText += t;
+          handle.setStreamingText(fullText);
+        },
+      });
+    }
+
+    let result;
+    try {
+      result = await streamAssistantResponse(requestMessages, true);
+    } catch (err: any) {
+      const message = String(err?.message ?? err);
+      const looksLikeToolJsonParseFailure = TOOL_JSON_PARSE_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+
+      if (!looksLikeToolJsonParseFailure || !toolsForThisRound) {
+        throw err;
+      }
+
+      // The model likely produced an unescaped quote/backslash inside a large
+      // string argument (e.g. write_file content), which corrupts llama-server's
+      // grammar-constrained JSON for the whole response and discards everything
+      // generated so far. Retrying the identical tools-enabled request is cheap
+      // relative to losing the generation outright, and often succeeds since
+      // sampling is stochastic — so try that once before giving up on tools.
+      handle.addEntry(
+        "info",
+        "⚠ model emitted invalid tool-call JSON; retrying once with tools before falling back"
+      );
+      handle.setStreamingText(null);
+      fullText = "";
+      try {
+        result = await streamAssistantResponse(requestMessages, true);
+      } catch (retryErr: any) {
+        const retryMessage = String(retryErr?.message ?? retryErr);
+        const stillLooksLikeToolJsonParseFailure = TOOL_JSON_PARSE_ERROR_PATTERNS.some((pattern) =>
+          pattern.test(retryMessage)
+        );
+        if (!stillLooksLikeToolJsonParseFailure) {
+          throw retryErr;
+        }
+        handle.addEntry(
+          "info",
+          "⚠ retry also failed with invalid tool-call JSON; falling back to a no-tools response"
+        );
+        handle.setStreamingText(null);
+        fullText = "";
+        result = await streamAssistantResponse(requestMessages, false);
+      }
+    }
 
     handle.setStreamingText(null);
 
