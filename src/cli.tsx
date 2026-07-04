@@ -78,7 +78,19 @@ async function main() {
 
   setToolLogSink((kind, text) => handle.addEntry(kind, text));
 
-  handle.addEntry("info", `codie → ${opts.url}`);
+  handle.addEntry("info", [
+    "",
+    "  ██████╗ ██████╗ ██████╗ ██╗███████╗",
+    "  ██╔════╝██╔═══██╗██╔══██╗██║██╔════╝",
+    "  ██║     ██║   ██║██║  ██║██║█████╗  ",
+    "  ██║     ██║   ██║██║  ██║██║██╔══╝  ",
+    "  ╚██████╗╚██████╔╝██████╔╝██║███████╗",
+    "   ╚═════╝ ╚═════╝ ╚═════╝ ╚═╝╚══════╝",
+    "",
+    "  v0.2.0 · Your local AI coding agent",
+    "  Think it. Type it. Ship it.",
+    "",
+  ].join("\n"));
 
   const healthy = await client.health();
   if (!healthy) {
@@ -92,7 +104,6 @@ async function main() {
   }
 
   const ctxSize = await client.getContextSize();
-  handle.addEntry("info", `context size: ${ctxSize} tokens`);
 
   // Session memory lives in <cwd>/.codie/<session>/info.md so it's project-local
   const sessionMemoryDir = path.join(cwd, ".codie", opts.session);
@@ -116,8 +127,6 @@ async function main() {
       handle.addEntry("info", `📝 loaded session memory from ${sessionMemoryPath}`);
     }
   }
-  handle.addEntry("info", `commands: /compact  /memory  /usage  /save  /sessions  /clear  /exit`);
-
   handle.setBusy(false);
   await refreshStatus();
 
