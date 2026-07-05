@@ -191,7 +191,7 @@ export async function executeTool(name: string, argsJson: string): Promise<strin
         await fs.mkdir(path.dirname(p), { recursive: true });
         await fs.writeFile(p, args.content, "utf-8");
         log("tool", `wrote ${args.path} (${args.content.length} bytes)`);
-        return `File written: ${args.path}`;
+        return `File written: ${path.basename(args.path)}`;
       }
 
       case "edit_file": {
