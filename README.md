@@ -1,7 +1,7 @@
 # codie
 
 ```
-  ██████╗ ██████╗ ██████╗ ██╗███████╗
+   ██████╗ ██████╗ ██████╗ ██╗███████╗
   ██╔════╝██╔═══██╗██╔══██╗██║██╔════╝
   ██║     ██║   ██║██║  ██║██║█████╗
   ██║     ██║   ██║██║  ██║██║██╔══╝
@@ -26,6 +26,7 @@ because `blessed`'s `Textbox` widget has an explicitly unfinished
 `// TODO: Handle directional keys` in its own source.
 
 Ink (used by Gemini CLI, Claude Code, and Codex's CLI) solves all of this natively:
+
 - **`<Static>`** renders permanent scrollback efficiently — finalized messages never re-render
 - **`useInput`** is a well-supported, documented hook with working arrow-key detection
 - **Flexbox layout** via `<Box>` makes pinning an input bar to the bottom trivial
@@ -86,15 +87,15 @@ codie --url http://localhost:8080
 
 ### Slash commands
 
-| Command      | Effect                                              |
-|--------------|------------------------------------------------------|
-| `/usage`     | Show current token usage vs. budget                  |
-| `/compact`   | Force compaction now                                 |
-| `/memory`    | Show the current session memory file (info.md)       |
-| `/save`      | Save session to disk                                 |
-| `/sessions`  | List saved sessions                                  |
-| `/clear`     | Wipe current history (keeps system prompt)           |
-| `/exit`      | Save and quit                                        |
+| Command     | Effect                                         |
+| ----------- | ---------------------------------------------- |
+| `/usage`    | Show current token usage vs. budget            |
+| `/compact`  | Force compaction now                           |
+| `/memory`   | Show the current session memory file (info.md) |
+| `/save`     | Save session to disk                           |
+| `/sessions` | List saved sessions                            |
+| `/clear`    | Wipe current history (keeps system prompt)     |
+| `/exit`     | Save and quit                                  |
 
 Sessions auto-save after every turn to `~/.codie/sessions/<name>.json`, so a crash
 or Ctrl+C doesn't lose your work — resume with `--session <name>`.
@@ -142,4 +143,3 @@ src/
 - No sandboxing beyond "stay inside the working directory" for file tools;
   `run_shell_command` executes real shell commands — review what the agent proposes
   before trusting it in sensitive directories.
-
