@@ -20,6 +20,7 @@ interface InputBarProps {
 
 export function InputBar({ onSubmit, disabled, placeholder }: InputBarProps) {
   const [value, setValue] = useState("");
+  const [tokenCount, setTokenCount] = useState(0);
   const historyRef = useRef<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const draftRef = useRef("");
@@ -99,8 +100,14 @@ export function InputBar({ onSubmit, disabled, placeholder }: InputBarProps) {
     { isActive: !disabled }
   );
 
+  const calculateTokenCount = (text: string): number => {
+    // Rough estimate: 1 token ≈ 4 characters
+    return Math.ceil(text.length / 4);
+  };
+
   const handleChange = (newVal: string) => {
     setValue(newVal);
+    setTokenCount(calculateTokenCount(newVal));
     setSuggestionIndex(0); // reset highlight when user types
     // Reset history browsing when they start typing freely
     if (historyIndex !== -1) {
@@ -162,6 +169,11 @@ export function InputBar({ onSubmit, disabled, placeholder }: InputBarProps) {
           placeholder={placeholder}
           focus={!disabled}
         />
+        <Box marginLeft={2}>
+          <Text dimColor color="gray">
+            {tokenCount} tokens
+          </Text>
+        </Box>
       </Box>
     </Box>
   );
