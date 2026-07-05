@@ -1,5 +1,17 @@
 # codie
 
+```
+  ██████╗ ██████╗ ██████╗ ██╗███████╗
+  ██╔════╝██╔═══██╗██╔══██╗██║██╔════╝
+  ██║     ██║   ██║██║  ██║██║█████╗
+  ██║     ██║   ██║██║  ██║██║██╔══╝
+  ╚██████╗╚██████╔╝██████╔╝██║███████╗
+   ╚═════╝ ╚═════╝ ╚═════╝ ╚═╝╚══════╝
+
+  v0.2.0 · Your local AI coding agent
+  Think it. Type it. Ship it.
+```
+
 A local, agentic coding CLI for `llama.cpp`'s `llama-server`, built with **Ink (React for
 terminals)**. It has automatic context compaction so the server never fails when the
 context window fills up, plus a proper multi-panel UI: fixed bottom input bar, scrollable
