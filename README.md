@@ -78,24 +78,37 @@ codie --url http://localhost:8080
 - **Bottom input bar**: bordered box, always focused, with a status line below showing
   cwd (left) and live token usage color-coded by how close you are to the context limit
   (green/yellow/red).
+- **Mode-aware input colors**: the input outline reflects the active mode —
+  agent (green), chat (blue), plan (yellow).
 - **Markdown rendering**: headers, bold, lists, and syntax-aware code blocks render with
   real ANSI styling once a response finishes streaming.
 - **Thinking spinner**: animates from the moment you hit enter until the first token
   arrives, then switches to a live raw-text preview of the streaming response.
 - **Command history**: press ↑/↓ to cycle through previous messages, exactly like a shell.
+- **Quick mode switch**: press Ctrl+Tab to cycle agent → chat → plan.
 - **Colorized diffs**: file edits show a proper +/- diff, green/red, instead of raw patch text.
+
+### Modes
+
+| Mode    | Tool Access                                                                                                                           |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent` | All tools                                                                                                                             |
+| `chat`  | Read-only tools (`read_file`, `list_dir`, `search_files`, `read_file_outline`, `get_file_content`, `get_file_size`, `get_file_lines`) |
+| `plan`  | All read-only tools plus `write_file`/`edit_file` only for `.md`/`.markdown` files                                                    |
 
 ### Slash commands
 
-| Command     | Effect                                         |
-| ----------- | ---------------------------------------------- |
-| `/usage`    | Show current token usage vs. budget            |
-| `/compact`  | Force compaction now                           |
-| `/memory`   | Show the current session memory file (info.md) |
-| `/save`     | Save session to disk                           |
-| `/sessions` | List saved sessions                            |
-| `/clear`    | Wipe current history (keeps system prompt)     |
-| `/exit`     | Save and quit                                  |
+| Command                     | Effect                                         |
+| --------------------------- | ---------------------------------------------- |
+| `/usage`                    | Show current token usage vs. budget            |
+| `/compact`                  | Force compaction now                           |
+| `/memory`                   | Show the current session memory file (info.md) |
+| `/save`                     | Save session to disk                           |
+| `/sessions`                 | List saved sessions                            |
+| `/clear`                    | Wipe current history (keeps system prompt)     |
+| `/mode`                     | Show active mode                               |
+| `/mode <agent\|chat\|plan>` | Change active mode                             |
+| `/exit`                     | Save and quit                                  |
 
 Sessions auto-save after every turn to `~/.codie/sessions/<name>.json`, so a crash
 or Ctrl+C doesn't lose your work — resume with `--session <name>`.

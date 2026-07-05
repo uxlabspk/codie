@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createTwoFilesPatch } from "diff";
 import type { ToolDef } from "./llamaClient.js";
+import type { AgentMode } from "./uiTypes.js";
 
 const execAsync = promisify(exec);
 const CWD = process.cwd();
@@ -183,6 +184,51 @@ export const toolDefs: ToolDef[] = [
   },
 ];
 
+const READ_TOOL_NAMES = new Set([
+  "read_file",
+  "list_dir",
+  "search_files",
+  "read_file_outline",
+  "get_file_content",
+  "get_file_size",
+  "get_file_lines",
+]);
+
+function isMarkdownPath(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return ext === ".md" || ext === ".markdown";
+}
+
+export function getToolDefsForMode(mode: AgentMode): ToolDef[] {
+  if (mode === "agent") return toolDefs;
+  if (mode === "chat") {
+    return toolDefs.filter((def) => READ_TOOL_NAMES.has(def.function.name));
+  }
+  // plan mode: read tools + markdown planning file saves/edits
+  return toolDefs.filter((def) => READ_TOOL_NAMES.has(def.function.name) || def.function.name === "write_file" || def.function.name === "edit_file");
+}
+
+function validateToolAccess(mode: AgentMode, name: string, args: any): string | null {
+  if (mode === "agent") return null;
+
+  if (mode === "chat") {
+    return READ_TOOL_NAMES.has(name) ? null : `Error: tool ${name} is blocked in chat mode (read-only).`;
+  }
+
+  // plan mode
+  if (READ_TOOL_NAMES.has(name)) return null;
+  if (name === "write_file" || name === "edit_file") {
+    const p = String(args?.path ?? "");
+    if (!p) return `Error: ${name} requires a path.`;
+    if (!isMarkdownPath(p)) {
+      return `Error: ${name} is restricted in plan mode. Only .md/.markdown planning files are allowed.`;
+    }
+    return null;
+  }
+
+  return `Error: tool ${name} is blocked in plan mode.`;
+}
+
 const TOOL_RESULT_CHAR_LIMIT = 8000;
 
 function truncateResult(result: string, toolName: string): string {
@@ -195,12 +241,17 @@ function truncateResult(result: string, toolName: string): string {
   );
 }
 
-export async function executeTool(name: string, argsJson: string): Promise<string> {
+export async function executeTool(name: string, argsJson: string, mode: AgentMode = "agent"): Promise<string> {
   let args: any;
   try {
     args = JSON.parse(argsJson || "{}");
   } catch {
     return `Error: invalid JSON arguments: ${argsJson}`;
+  }
+
+  const accessError = validateToolAccess(mode, name, args);
+  if (accessError) {
+    return accessError;
   }
 
   try {

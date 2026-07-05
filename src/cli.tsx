@@ -6,9 +6,10 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { LlamaClient } from "./llamaClient.js";
 import { ContextManager } from "./contextManager.js";
-import { toolDefs, executeTool, setToolLogSink } from "./tools.js";
+import { executeTool, getToolDefsForMode, setToolLogSink } from "./tools.js";
 import { saveSession, loadSession, listSessions } from "./session.js";
 import { App, type AppHandle } from "./App.js";
+import { MODE_ORDER, type AgentMode } from "./uiTypes.js";
 import instances from "../node_modules/ink/build/instances.js";
 
 
@@ -62,11 +63,22 @@ const opts = program.opts();
 async function main() {
   const client = new LlamaClient(opts.url);
   const cwd = process.cwd();
+  let currentMode: AgentMode = "agent";
 
   let resolveHandle!: (h: AppHandle) => void;
   const handleReady = new Promise<AppHandle>((resolve) => {
     resolveHandle = resolve;
   });
+
+  let uiHandle: AppHandle | null = null;
+
+  const modeHelp = "agent (all tools) | chat (read-only tools) | plan (read tools + write/edit .md/.markdown only)";
+
+  function setMode(next: AgentMode, source: string = "mode updated") {
+    currentMode = next;
+    uiHandle?.setMode(next);
+    uiHandle?.addEntry("info", `${source}: ${next} — ${modeHelp}`);
+  }
 
   // ctxMgr is created asynchronously below (after health/context-size checks),
   // but the Ink UI mounts and starts accepting keystrokes immediately. If a
@@ -80,8 +92,13 @@ async function main() {
     React.createElement(App, {
       cwd,
       initialUsage: { used: 0, budget: 0, ctxSize: 0, pct: 0 },
+      initialMode: currentMode,
       onUserInput: (text: string) => void handleInput(text),
-      onReady: (h: AppHandle) => resolveHandle(h),
+      onModeChange: (next: AgentMode) => setMode(next, "mode switched via Ctrl+Tab"),
+      onReady: (h: AppHandle) => {
+        uiHandle = h;
+        resolveHandle(h);
+      },
     })
   );
 
@@ -100,6 +117,7 @@ async function main() {
 
 
   const handle = await handleReady;
+  uiHandle = handle;
   handle.setBusy(true, "starting up");
 
   setToolLogSink((kind, text) => handle.addEntry(kind, text));
@@ -117,6 +135,7 @@ async function main() {
     "  Think it. Type it. Ship it.",
     "",
   ].join("\n"));
+  //handle.addEntry("info", `active mode: ${currentMode} — ${modeHelp}`);
 
   const healthy = await client.health();
   if (!healthy) {
@@ -225,6 +244,21 @@ async function main() {
       return;
     }
 
+    if (trimmed === "/mode") {
+      handle.addEntry("info", `active mode: ${currentMode} — ${modeHelp}`);
+      return;
+    }
+
+    if (trimmed.startsWith("/mode ")) {
+      const requested = trimmed.slice(6).trim().toLowerCase();
+      if (MODE_ORDER.includes(requested as AgentMode)) {
+        setMode(requested as AgentMode, "mode changed");
+      } else {
+        handle.addEntry("info", `unknown mode "${requested}". use /mode <agent|chat|plan>`);
+      }
+      return;
+    }
+
     if (trimmed === "/sessions") {
       const sessions = await listSessions();
       handle.addEntry("info", `sessions: ${sessions.join(", ") || "(none)"}`);
@@ -294,7 +328,7 @@ async function main() {
     let fullText = "";
 
     // At soft limit, withdraw tools so the model must answer, not keep calling
-    const toolsForThisRound = depth >= SOFT_LIMIT ? undefined : toolDefs;
+    const toolsForThisRound = depth >= SOFT_LIMIT ? undefined : getToolDefsForMode(currentMode);
     if (depth === SOFT_LIMIT) {
       handle.addEntry("info", `⚠ many tool rounds completed — asking model to wrap up`);
     }
@@ -382,7 +416,7 @@ async function main() {
 
     for (const call of result.tool_calls) {
       handle.addEntry("tool", `→ calling ${call.function.name}(${call.function.arguments})`);
-      const toolResult = await executeTool(call.function.name, call.function.arguments);
+      const toolResult = await executeTool(call.function.name, call.function.arguments, currentMode);
       ctx.push({
         role: "tool",
         tool_call_id: call.id,

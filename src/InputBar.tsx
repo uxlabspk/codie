@@ -1,24 +1,34 @@
 import React, { useState, useRef } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
+import type { AgentMode } from "./uiTypes.js";
 
 const SLASH_COMMANDS = [
-  { name: "/usage",    desc: "Show token usage vs. budget" },
-  { name: "/compact",  desc: "Force compaction now" },
-  { name: "/memory",   desc: "Show session memory file (info.md)" },
-  { name: "/save",     desc: "Save session to disk" },
+  { name: "/usage", desc: "Show token usage vs. budget" },
+  { name: "/compact", desc: "Force compaction now" },
+  { name: "/memory", desc: "Show session memory file (info.md)" },
+  { name: "/save", desc: "Save session to disk" },
   { name: "/sessions", desc: "List saved sessions" },
-  { name: "/clear",    desc: "Wipe history (keeps system prompt)" },
-  { name: "/exit",     desc: "Save and quit" },
+  { name: "/clear", desc: "Wipe history (keeps system prompt)" },
+  { name: "/mode", desc: "Show or set mode: /mode <agent|chat|plan>" },
+  { name: "/exit", desc: "Save and quit" },
 ];
 
 interface InputBarProps {
   onSubmit: (text: string) => void;
+  mode: AgentMode;
+  onCycleMode: () => void;
   disabled?: boolean;
   placeholder?: string;
 }
 
-export function InputBar({ onSubmit, disabled, placeholder }: InputBarProps) {
+const MODE_COLORS: Record<AgentMode, "green" | "blue" | "yellow"> = {
+  agent: "green",
+  chat: "blue",
+  plan: "yellow",
+};
+
+export function InputBar({ onSubmit, mode, onCycleMode, disabled, placeholder }: InputBarProps) {
   const [value, setValue] = useState("");
   const [tokenCount, setTokenCount] = useState(0);
   const historyRef = useRef<string[]>([]);
@@ -41,6 +51,11 @@ export function InputBar({ onSubmit, disabled, placeholder }: InputBarProps) {
   useInput(
     (_input, key) => {
       if (disabled) return;
+
+      if (key.ctrl && key.tab) {
+        onCycleMode();
+        return;
+      }
 
       // Tab or right-arrow at end of input → accept highlighted suggestion
       if (key.tab || (key.rightArrow && value === value)) {
@@ -128,6 +143,8 @@ export function InputBar({ onSubmit, disabled, placeholder }: InputBarProps) {
     }
   };
 
+  const accent = MODE_COLORS[mode];
+
   return (
     <Box flexDirection="column">
       {/* Autocomplete dropdown — rendered above the input */}
@@ -160,8 +177,8 @@ export function InputBar({ onSubmit, disabled, placeholder }: InputBarProps) {
         </Box>
       )}
 
-      <Box borderStyle="round" borderColor={disabled ? "gray" : "green"} paddingX={1}>
-        <Text color="green">{"› "}</Text>
+      <Box borderStyle="round" borderColor={disabled ? "gray" : accent} paddingX={1}>
+        <Text color={accent}>{"› "}</Text>
         <TextInput
           value={value}
           onChange={handleChange}

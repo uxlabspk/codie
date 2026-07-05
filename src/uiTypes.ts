@@ -1,5 +1,14 @@
 export type LogEntryKind = "user" | "assistant" | "info" | "error" | "tool" | "diff";
 
+export type AgentMode = "agent" | "chat" | "plan";
+
+export const MODE_ORDER: AgentMode[] = ["agent", "chat", "plan"];
+
+export function nextMode(mode: AgentMode): AgentMode {
+  const idx = MODE_ORDER.indexOf(mode);
+  return MODE_ORDER[(idx + 1) % MODE_ORDER.length];
+}
+
 export interface LogEntry {
   id: string;
   kind: LogEntryKind;
