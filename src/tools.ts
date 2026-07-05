@@ -138,6 +138,49 @@ export const toolDefs: ToolDef[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_file_content",
+      description: "Read the entire contents of a file. Use when you want to read a file without line range constraints.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative file path" },
+          encoding: { type: "string", description: "File encoding (default: utf-8)", enum: ["utf-8", "utf-16"] },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_file_size",
+      description: "Get the size of a file in bytes.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative file path" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_file_lines",
+      description: "Get the number of lines in a file.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative file path" },
+        },
+        required: ["path"],
+      },
+    },
+  },
 ];
 
 const TOOL_RESULT_CHAR_LIMIT = 8000;
@@ -283,6 +326,28 @@ export async function executeTool(name: string, argsJson: string): Promise<strin
         log("tool", `$ ${args.command}`);
         const { stdout, stderr } = await execAsync(args.command, { cwd: CWD, timeout: 60_000 });
         return truncateResult(`stdout:\n${stdout}\nstderr:\n${stderr}`, name);
+      }
+
+      case "get_file_content": {
+        const p = resolveSafe(args.path);
+        const content = await fs.readFile(p, args.encoding || "utf-8");
+        // Ensure content is always a string (fs.readFile can return NonSharedBuffer)
+        const strContent = typeof content === "string" ? content : content.toString();
+        return truncateResult(strContent, name);
+      }
+
+      case "get_file_size": {
+        const p = resolveSafe(args.path);
+        const stats = await fs.stat(p);
+        return `Size: ${stats.size} bytes`;
+      }
+
+      case "get_file_lines": {
+        const p = resolveSafe(args.path);
+        const content = await fs.readFile(p, "utf-8");
+        const lines = content.split("\n");
+        // Remove empty last line if file doesn't end with newline
+        return `Lines: ${lines.length - (lines[lines.length - 1] === "" ? 1 : 0)}`;
       }
 
       default:
