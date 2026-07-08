@@ -12,8 +12,11 @@ import { App, type AppHandle } from "./App.js";
 import { MODE_ORDER, type AgentMode } from "./uiTypes.js";
 import instances from "../node_modules/ink/build/instances.js";
 
+const PLANNING_FILE = "planning.md";
 
-const SYSTEM_PROMPT = `You are a local coding agent running against the user's own model via llama.cpp.
+
+function getSystemPromptForMode(mode: AgentMode): string {
+  const basePrompt = `You are a local coding agent running against the user's own model via llama.cpp.
 You can read/write/edit files, list directories, search file contents, and run shell commands using the
 provided tools.
 
@@ -33,14 +36,30 @@ Editing guidelines:
 - Always inspect a file with read_file before editing it.
 - Prefer edit_file for small changes and write_file only for new files or full rewrites.
 - When running shell commands, explain briefly what you're about to do first.
-- write_file's "content" argument is a JSON string. Any literal double-quote (") or backslash (\\)
-  inside the file content MUST be escaped as \\" or \\\\, and raw newlines must be \\n. If a file
+- write_file's "content" argument is a JSON string. Any literal double-quote ("") or backslash (\\)
+  inside the file content MUST be escaped as \" or \\\\, and raw newlines must be \\n. If a file
   contains long CSS/JS/HTML with quotes, be careful to escape every one of them — a single
   unescaped quote will corrupt the whole tool call and the file will fail to write.
 
 Output guidelines:
 - Be concise. When a task is done, say so clearly and stop.
 - Format responses in markdown when helpful (code blocks, lists, headers).`;
+
+  if (mode === "agent") {
+    return basePrompt;
+  }
+  
+  if (mode === "chat") {
+    return `${basePrompt}
+
+IMPORTANT: You are in CHAT mode. You can ONLY use read-only tools (read_file, list_dir, search_files, read_file_outline, get_file_content, get_file_size, get_file_lines). You CANNOT write, edit, or delete files. If the user asks you to write or edit a file, clearly state: "I cannot write or edit files in chat mode. Please switch to agent mode to make file changes."`;
+  }
+  
+  // plan mode
+  return `${basePrompt}
+
+IMPORTANT: You are in PLAN mode. You can ONLY use read-only tools (read_file, list_dir, search_files, read_file_outline, get_file_content, get_file_size, get_file_lines). Your conversation will be automatically saved to planning.md in the project root for coding implementation planning. Focus on planning and analyzing code, not on making changes.`;
+}
 
 const TOOL_JSON_PARSE_ERROR_PATTERNS = [
   /Failed to parse tool call arguments as JSON/i,
@@ -72,12 +91,46 @@ async function main() {
 
   let uiHandle: AppHandle | null = null;
 
-  const modeHelp = "agent (all tools) | chat (read-only tools) | plan (read tools + write/edit .md/.markdown only)";
+  const modeHelp = "agent (all tools) | chat (read-only tools) | plan (read-only tools, auto-saves planning.md)";
 
   function setMode(next: AgentMode, source: string = "mode updated") {
     currentMode = next;
     uiHandle?.setMode(next);
     uiHandle?.addEntry("info", `${source}: ${next} — ${modeHelp}`);
+    
+    // Add mode change notification to the context so the model is aware
+    if (ctxMgr) {
+      const modeMessage = next === "chat" 
+        ? "NOTE: Mode changed to CHAT. You can ONLY use read-only tools. If asked to write files, respond: 'I cannot write or edit files in chat mode. Please switch to agent mode to make file changes.'"
+        : next === "plan"
+          ? "NOTE: Mode changed to PLAN. You can ONLY use read-only tools. Focus on planning - your conversation will be saved to planning.md."
+          : "NOTE: Mode changed to AGENT. All tools are now available.";
+      
+      ctxMgr.push({ role: "system", content: modeMessage });
+    }
+  }
+
+  async function savePlanningFile() {
+    if (currentMode !== "plan") return;
+    try {
+      const planningPath = path.join(cwd, PLANNING_FILE);
+      const history = ctxMgr?.getHistory();
+      if (!history || history.length === 0) return;
+
+      // Format the conversation history as markdown
+      const planningContent = history
+        .map((msg) => {
+          const roleLabel = msg.role === "user" ? "**User**" : msg.role === "assistant" ? "**Assistant**" : `**${msg.role}**`;
+          return `${roleLabel}:\n\n${msg.content}`;
+        })
+        .join("\n\n---\n\n");
+
+      await fs.mkdir(path.dirname(planningPath), { recursive: true });
+      await fs.writeFile(planningPath, planningContent, "utf-8");
+      handle.addEntry("info", `📝 planning saved to ${PLANNING_FILE}`);
+    } catch (err: any) {
+      handle.addEntry("error", `Failed to save planning.md: ${err.message}`);
+    }
   }
 
   // ctxMgr is created asynchronously below (after health/context-size checks),
@@ -155,7 +208,7 @@ async function main() {
   const sessionMemoryPath = path.join(sessionMemoryDir, "info.md");
   await fs.mkdir(sessionMemoryDir, { recursive: true });
 
-  ctxMgr = new ContextManager(client, SYSTEM_PROMPT, {
+  ctxMgr = new ContextManager(client, getSystemPromptForMode(currentMode), {
     reserveForResponse: parseInt(opts.maxTokens, 10),
     keepRecentTurns: parseInt(opts.keepRecent, 10),
     sessionMemoryPath,
@@ -265,6 +318,11 @@ async function main() {
       return;
     }
 
+    if (trimmed === "/save-planning") {
+      await savePlanningFile();
+      return;
+    }
+
     handle.addEntry("user", trimmed);
     ctxMgr.push({ role: "user", content: trimmed });
 
@@ -277,6 +335,7 @@ async function main() {
     handle.setBusy(false);
 
     await saveSession(opts.session, ctxMgr.getHistory());
+    await savePlanningFile();
     await refreshStatus();
   }
 

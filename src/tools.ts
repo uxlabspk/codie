@@ -194,18 +194,13 @@ const READ_TOOL_NAMES = new Set([
   "get_file_lines",
 ]);
 
-function isMarkdownPath(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  return ext === ".md" || ext === ".markdown";
-}
-
 export function getToolDefsForMode(mode: AgentMode): ToolDef[] {
   if (mode === "agent") return toolDefs;
   if (mode === "chat") {
     return toolDefs.filter((def) => READ_TOOL_NAMES.has(def.function.name));
   }
-  // plan mode: read tools + markdown planning file saves/edits
-  return toolDefs.filter((def) => READ_TOOL_NAMES.has(def.function.name) || def.function.name === "write_file" || def.function.name === "edit_file");
+  // plan mode: read-only tools only (planning is done via conversation, saved automatically)
+  return toolDefs.filter((def) => READ_TOOL_NAMES.has(def.function.name));
 }
 
 function validateToolAccess(mode: AgentMode, name: string, args: any): string | null {
@@ -215,18 +210,8 @@ function validateToolAccess(mode: AgentMode, name: string, args: any): string | 
     return READ_TOOL_NAMES.has(name) ? null : `Error: tool ${name} is blocked in chat mode (read-only).`;
   }
 
-  // plan mode
-  if (READ_TOOL_NAMES.has(name)) return null;
-  if (name === "write_file" || name === "edit_file") {
-    const p = String(args?.path ?? "");
-    if (!p) return `Error: ${name} requires a path.`;
-    if (!isMarkdownPath(p)) {
-      return `Error: ${name} is restricted in plan mode. Only .md/.markdown planning files are allowed.`;
-    }
-    return null;
-  }
-
-  return `Error: tool ${name} is blocked in plan mode.`;
+  // plan mode: read-only only
+  return READ_TOOL_NAMES.has(name) ? null : `Error: tool ${name} is blocked in plan mode (read-only).`;
 }
 
 const TOOL_RESULT_CHAR_LIMIT = 8000;

@@ -94,7 +94,7 @@ codie --url http://localhost:8080
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `agent` | All tools                                                                                                                             |
 | `chat`  | Read-only tools (`read_file`, `list_dir`, `search_files`, `read_file_outline`, `get_file_content`, `get_file_size`, `get_file_lines`) |
-| `plan`  | All read-only tools plus `write_file`/`edit_file` only for `.md`/`.markdown` files                                                    |
+| `plan`  | Read-only tools only. Conversation is automatically saved to `planning.md` in the codebase root for coding implementation planning.    |
 
 ### Slash commands
 
@@ -104,6 +104,7 @@ codie --url http://localhost:8080
 | `/compact`                  | Force compaction now                           |
 | `/memory`                   | Show the current session memory file (info.md) |
 | `/save`                     | Save session to disk                           |
+| `/save-planning`            | Save current planning conversation to planning.md |
 | `/sessions`                 | List saved sessions                            |
 | `/clear`                    | Wipe current history (keeps system prompt)     |
 | `/mode`                     | Show active mode                               |
