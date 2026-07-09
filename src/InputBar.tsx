@@ -49,10 +49,10 @@ export function InputBar({ onSubmit, mode, onCycleMode, disabled, placeholder }:
     : 0;
 
   useInput(
-    (_input, key) => {
+    (input, key) => {
       if (disabled) return;
 
-      if (key.ctrl && key.tab) {
+      if (key.ctrl && (key.upArrow || key.downArrow)) {
         onCycleMode();
         return;
       }

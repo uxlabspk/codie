@@ -85,7 +85,7 @@ codie --url http://localhost:8080
 - **Thinking spinner**: animates from the moment you hit enter until the first token
   arrives, then switches to a live raw-text preview of the streaming response.
 - **Command history**: press ↑/↓ to cycle through previous messages, exactly like a shell.
-- **Quick mode switch**: press Ctrl+Tab to cycle agent → chat → plan.
+- **Quick mode switch**: press Ctrl+↑ or Ctrl+↓ to cycle agent → chat → plan.
 - **Colorized diffs**: file edits show a proper +/- diff, green/red, instead of raw patch text.
 
 ### Modes
