@@ -192,7 +192,7 @@ async function main() {
       initialUsage: { used: 0, budget: 0, ctxSize: 0, pct: 0 },
       initialMode: currentMode,
       onUserInput: (text: string) => void handleInput(text),
-      onModeChange: (next: AgentMode) => setMode(next, "mode switched via Ctrl+Tab"),
+      onModeChange: (next: AgentMode) => setMode(next, "mode switched"),
       onReady: (h: AppHandle) => {
         uiHandle = h;
         resolveHandle(h);
@@ -267,7 +267,7 @@ async function main() {
     // Fresh session — inject prior memory if it exists
     const hadMemory = await ctxMgr.loadMemoryIfExists();
     if (hadMemory) {
-      handle.addEntry("info", `📝 loaded session memory from ${sessionMemoryPath}`);
+      handle.addEntry("info", `loaded session memory from ${sessionMemoryPath}`);
     }
   }
   handle.setBusy(false);
@@ -306,9 +306,9 @@ async function main() {
       if (!result.compacted) {
         handle.addEntry("info", "nothing to compact yet");
       } else if (result.deepReset) {
-        handle.addEntry("info", `🧠 deep reset — memory saved to ${result.memoryPath}, history cleared`);
+        handle.addEntry("info", `deep reset — memory saved to ${result.memoryPath}, history cleared`);
       } else {
-        handle.addEntry("info", `⚙ compacted ${result.removedCount} messages`);
+        handle.addEntry("info", `compacted ${result.removedCount} messages`);
       }
       await refreshStatus();
       return;
@@ -322,7 +322,7 @@ async function main() {
       }
       try {
         const content = await fs.readFile(memPath, "utf-8");
-        handle.addEntry("info", `📝 memory file (${memPath}):\n\n${content}`);
+        handle.addEntry("info", `memory file (${memPath}):\n\n${content}`);
       } catch {
         handle.addEntry("info", `no memory file yet — will be created automatically when context fills up`);
       }
@@ -426,7 +426,7 @@ async function main() {
 
     if (depth >= HARD_LIMIT) {
       // Absolute safety cap — should never be hit in practice
-      handle.addEntry("info", `⚠ reached ${HARD_LIMIT} tool-call rounds, wrapping up`);
+      handle.addEntry("info", `reached ${HARD_LIMIT} tool-call rounds, wrapping up`);
       // One final call with no tools so the model summarises what it did
       const finalResult = await client.chatStream(ctx.getMessagesForRequest(), {
         maxTokens: parseInt(opts.maxTokens, 10),
@@ -441,12 +441,12 @@ async function main() {
     const compaction = await ctx.ensureFits();
     if (compaction.compacted) {
       if (compaction.deepReset) {
-        handle.addEntry("info", `🧠 context window full — deep reset performed, memory saved to ${compaction.memoryPath}`);
+        handle.addEntry("info", `context window full — deep reset performed, memory saved to ${compaction.memoryPath}`);
         // History is now [memoryMsg, lastUserMsg]. Reset depth so the agent
         // continues with a fresh round counter instead of hitting the soft limit.
         return await runAgentTurn(ctx, 0);
       } else {
-        handle.addEntry("info", `⚙ context was getting full — auto-compacted ${compaction.removedCount} older messages`);
+        handle.addEntry("info", `context was getting full — auto-compacted ${compaction.removedCount} older messages`);
       }
     }
 
@@ -458,7 +458,7 @@ async function main() {
     // At soft limit, withdraw tools so the model must answer, not keep calling
     const toolsForThisRound = depth >= SOFT_LIMIT ? undefined : getToolDefsForMode(currentMode);
     if (depth === SOFT_LIMIT) {
-      handle.addEntry("info", `⚠ many tool rounds completed — asking model to wrap up`);
+      handle.addEntry("info", `many tool rounds completed — asking model to wrap up`);
     }
 
     const requestMessages = ctx.getMessagesForRequest();
@@ -493,7 +493,7 @@ async function main() {
       // sampling is stochastic — so try that once before giving up on tools.
       handle.addEntry(
         "info",
-        "⚠ model emitted invalid tool-call JSON; retrying once with tools before falling back"
+        "model emitted invalid tool-call JSON; retrying once with tools before falling back"
       );
       handle.setStreamingText(null);
       fullText = "";
@@ -509,7 +509,7 @@ async function main() {
         }
         handle.addEntry(
           "info",
-          "⚠ retry also failed with invalid tool-call JSON; falling back to a no-tools response"
+          "retry also failed with invalid tool-call JSON; falling back to a no-tools response"
         );
         handle.setStreamingText(null);
         fullText = "";
@@ -537,7 +537,7 @@ async function main() {
     if (result.tool_calls.length > MAX_TOOLS_PER_ROUND) {
       handle.addEntry(
         "info",
-        `⚠ model requested ${result.tool_calls.length} tool calls at once — limiting to ${MAX_TOOLS_PER_ROUND}`
+        `model requested ${result.tool_calls.length} tool calls at once — limiting to ${MAX_TOOLS_PER_ROUND}`
       );
       result.tool_calls.splice(MAX_TOOLS_PER_ROUND);
     }
