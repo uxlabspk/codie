@@ -41,6 +41,13 @@ Editing guidelines:
   contains long CSS/JS/HTML with quotes, be careful to escape every one of them — a single
   unescaped quote will corrupt the whole tool call and the file will fail to write.
 
+Task decomposition guidelines:
+- When the user gives a complex or multi-step task, FIRST break it into a numbered subtask list (todo).
+- Present the todo list to the user before starting work.
+- Execute subtasks one by one, marking each as [done] before moving to the next.
+- If a subtask fails, report it and continue with the next.
+- Keep the todo list visible in your responses so progress is clear.
+
 Output guidelines:
 - Be concise. When a task is done, say so clearly and stop.
 - Format responses in markdown when helpful (code blocks, lists, headers).`;
@@ -352,8 +359,8 @@ async function main() {
     // After many chained rounds, stop passing tools to the model so it is
     // forced to give a final answer with what it has — rather than aborting
     // the whole turn with an error. 20 rounds is enough for any real task.
-    const SOFT_LIMIT = 12;
-    const HARD_LIMIT = 20;
+    const SOFT_LIMIT = 20;
+    const HARD_LIMIT = 35;
 
     if (depth >= HARD_LIMIT) {
       // Absolute safety cap — should never be hit in practice
