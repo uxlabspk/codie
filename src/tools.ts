@@ -219,22 +219,14 @@ const READ_TOOL_NAMES = new Set([
 
 export function getToolDefsForMode(mode: AgentMode): ToolDef[] {
   if (mode === "agent") return toolDefs;
-  if (mode === "chat") {
-    return toolDefs.filter((def) => READ_TOOL_NAMES.has(def.function.name));
-  }
-  // plan mode: read-only tools only (planning is done via conversation, saved automatically)
+  // chat mode: read-only tools only
   return toolDefs.filter((def) => READ_TOOL_NAMES.has(def.function.name));
 }
 
 function validateToolAccess(mode: AgentMode, name: string, args: any): string | null {
   if (mode === "agent") return null;
-
-  if (mode === "chat") {
-    return READ_TOOL_NAMES.has(name) ? null : `Error: tool ${name} is blocked in chat mode (read-only).`;
-  }
-
-  // plan mode: read-only only
-  return READ_TOOL_NAMES.has(name) ? null : `Error: tool ${name} is blocked in plan mode (read-only).`;
+  // chat mode: read-only only
+  return READ_TOOL_NAMES.has(name) ? null : `Error: tool ${name} is blocked in chat mode (read-only).`;
 }
 
 const TOOL_RESULT_CHAR_LIMIT = 8000;

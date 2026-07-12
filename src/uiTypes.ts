@@ -1,8 +1,8 @@
 export type LogEntryKind = "user" | "assistant" | "info" | "error" | "tool" | "diff";
 
-export type AgentMode = "agent" | "chat" | "plan";
+export type AgentMode = "agent" | "chat";
 
-export const MODE_ORDER: AgentMode[] = ["agent", "chat", "plan"];
+export const MODE_ORDER: AgentMode[] = ["agent", "chat"];
 
 export function nextMode(mode: AgentMode): AgentMode {
   const idx = MODE_ORDER.indexOf(mode);

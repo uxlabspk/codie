@@ -12,8 +12,6 @@ import { App, type AppHandle } from "./App.js";
 import { MODE_ORDER, type AgentMode } from "./uiTypes.js";
 import instances from "../node_modules/ink/build/instances.js";
 
-const PLANNING_FILE = "planning.md";
-
 const DESIGN_MODE_PROMPT = `You are in DESIGN MODE. The user has described a project and wants you to create a comprehensive implementation plan.
 
 Follow this workflow exactly:
@@ -129,11 +127,8 @@ Output guidelines:
 
 IMPORTANT: You are in CHAT mode. You can ONLY use read-only tools (read_file, list_dir, search_files, read_file_outline, get_file_content, get_file_size, get_file_lines). You CANNOT write, edit, or delete files. If the user asks you to write or edit a file, clearly state: "I cannot write or edit files in chat mode. Please switch to agent mode to make file changes."`;
   }
-  
-  // plan mode
-  return `${basePrompt}
 
-IMPORTANT: You are in PLAN mode. You can ONLY use read-only tools (read_file, list_dir, search_files, read_file_outline, get_file_content, get_file_size, get_file_lines). Your conversation will be automatically saved to planning.md in the project root for coding implementation planning. Focus on planning and analyzing code, not on making changes.`;
+  return basePrompt;
 }
 
 const TOOL_JSON_PARSE_ERROR_PATTERNS = [
@@ -166,7 +161,7 @@ async function main() {
 
   let uiHandle: AppHandle | null = null;
 
-  const modeHelp = "agent (all tools) | chat (read-only tools) | plan (read-only tools, auto-saves planning.md)";
+  const modeHelp = "agent (all tools) | chat (read-only tools)";
 
   function setMode(next: AgentMode, source: string = "mode updated") {
     currentMode = next;
@@ -177,34 +172,9 @@ async function main() {
     if (ctxMgr) {
       const modeMessage = next === "chat" 
         ? "NOTE: Mode changed to CHAT. You can ONLY use read-only tools. If asked to write files, respond: 'I cannot write or edit files in chat mode. Please switch to agent mode to make file changes.'"
-        : next === "plan"
-          ? "NOTE: Mode changed to PLAN. You can ONLY use read-only tools. Focus on planning - your conversation will be saved to planning.md."
-          : "NOTE: Mode changed to AGENT. All tools are now available.";
+        : "NOTE: Mode changed to AGENT. All tools are now available.";
       
       ctxMgr.push({ role: "system", content: modeMessage });
-    }
-  }
-
-  async function savePlanningFile() {
-    if (currentMode !== "plan") return;
-    try {
-      const planningPath = path.join(cwd, PLANNING_FILE);
-      const history = ctxMgr?.getHistory();
-      if (!history || history.length === 0) return;
-
-      // Format the conversation history as markdown
-      const planningContent = history
-        .map((msg) => {
-          const roleLabel = msg.role === "user" ? "**User**" : msg.role === "assistant" ? "**Assistant**" : `**${msg.role}**`;
-          return `${roleLabel}:\n\n${msg.content}`;
-        })
-        .join("\n\n---\n\n");
-
-      await fs.mkdir(path.dirname(planningPath), { recursive: true });
-      await fs.writeFile(planningPath, planningContent, "utf-8");
-      handle.addEntry("info", `📝 planning saved to ${PLANNING_FILE}`);
-    } catch (err: any) {
-      handle.addEntry("error", `Failed to save planning.md: ${err.message}`);
     }
   }
 
@@ -382,7 +352,7 @@ async function main() {
       if (MODE_ORDER.includes(requested as AgentMode)) {
         setMode(requested as AgentMode, "mode changed");
       } else {
-        handle.addEntry("info", `unknown mode "${requested}". use /mode <agent|chat|plan>`);
+        handle.addEntry("info", `unknown mode "${requested}". use /mode <agent|chat>`);
       }
       return;
     }
@@ -390,11 +360,6 @@ async function main() {
     if (trimmed === "/sessions") {
       const sessions = await listSessions();
       handle.addEntry("info", `sessions: ${sessions.join(", ") || "(none)"}`);
-      return;
-    }
-
-    if (trimmed === "/save-planning") {
-      await savePlanningFile();
       return;
     }
 
@@ -440,7 +405,6 @@ async function main() {
     handle.setBusy(false);
 
     await saveSession(opts.session, ctxMgr.getHistory());
-    await savePlanningFile();
     await refreshStatus();
   }
 

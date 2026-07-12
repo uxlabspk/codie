@@ -10,7 +10,7 @@ const SLASH_COMMANDS = [
   { name: "/save", desc: "Save session to disk" },
   { name: "/sessions", desc: "List saved sessions" },
   { name: "/clear", desc: "Wipe history (keeps system prompt)" },
-  { name: "/mode", desc: "Show or set mode: /mode <agent|chat|plan>" },
+  { name: "/mode", desc: "Show or set mode: /mode <agent|chat>" },
   { name: "/design", desc: "Design a project: /design <description>" },
   { name: "/exit", desc: "Save and quit" },
 ];
@@ -23,10 +23,9 @@ interface InputBarProps {
   placeholder?: string;
 }
 
-const MODE_COLORS: Record<AgentMode, "green" | "blue" | "yellow"> = {
+const MODE_COLORS: Record<AgentMode, "green" | "blue"> = {
   agent: "green",
   chat: "blue",
-  plan: "yellow",
 };
 
 export function InputBar({ onSubmit, mode, onCycleMode, disabled, placeholder }: InputBarProps) {
