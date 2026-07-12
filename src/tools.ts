@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createTwoFilesPatch } from "diff";
+import fetch from "node-fetch";
 import type { ToolDef } from "./llamaClient.js";
 import type { AgentMode } from "./uiTypes.js";
 
@@ -182,6 +183,27 @@ export const toolDefs: ToolDef[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description:
+        "Search the web for information using DuckDuckGo. Returns titles, snippets, and URLs. " +
+        "Use for finding best practices, documentation, tutorials, library recommendations, " +
+        "architecture patterns, or any factual information not in your training data.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query string" },
+          num_results: {
+            type: "number",
+            description: "Number of results to return (default 5, max 10)",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
 ];
 
 const READ_TOOL_NAMES = new Set([
@@ -192,6 +214,7 @@ const READ_TOOL_NAMES = new Set([
   "get_file_content",
   "get_file_size",
   "get_file_lines",
+  "web_search",
 ]);
 
 export function getToolDefsForMode(mode: AgentMode): ToolDef[] {
@@ -224,6 +247,62 @@ function truncateResult(result: string, toolName: string): string {
     kept +
     `\n\n[... truncated ${dropped} chars — use read_file with start_line/end_line or a more specific search to see more]`
   );
+}
+
+async function scrapeDuckDuckGo(query: string, numResults: number): Promise<string> {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    redirect: "follow",
+  });
+
+  if (!res.ok) {
+    throw new Error(`DuckDuckGo request failed: ${res.status}`);
+  }
+
+  const html = await res.text();
+  const results: { title: string; snippet: string; url: string }[] = [];
+
+  // Match result blocks: each result has a link with class "result__a" and a snippet
+  const titleRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+  const snippetRegex = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+
+  const titles: { url: string; title: string }[] = [];
+  let match;
+  while ((match = titleRegex.exec(html)) !== null) {
+    const rawUrl = match[1];
+    const title = match[2].replace(/<[^>]+>/g, "").trim();
+    // DuckDuckGo wraps URLs in a redirect; extract the actual URL
+    const uddgMatch = rawUrl.match(/[?&]uddg=([^&]+)/);
+    const actualUrl = uddgMatch ? decodeURIComponent(uddgMatch[1]) : rawUrl;
+    titles.push({ url: actualUrl, title });
+  }
+
+  const snippets: string[] = [];
+  while ((match = snippetRegex.exec(html)) !== null) {
+    snippets.push(match[1].replace(/<[^>]+>/g, "").trim());
+  }
+
+  for (let i = 0; i < Math.min(titles.length, numResults, snippets.length); i++) {
+    results.push({
+      title: titles[i].title,
+      snippet: snippets[i],
+      url: titles[i].url,
+    });
+  }
+
+  if (results.length === 0) {
+    return `No results found for: ${query}`;
+  }
+
+  return results
+    .map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.snippet}`)
+    .join("\n\n");
 }
 
 export async function executeTool(name: string, argsJson: string, mode: AgentMode = "agent"): Promise<string> {
@@ -384,6 +463,13 @@ export async function executeTool(name: string, argsJson: string, mode: AgentMod
         const lines = content.split("\n");
         // Remove empty last line if file doesn't end with newline
         return `Lines: ${lines.length - (lines[lines.length - 1] === "" ? 1 : 0)}`;
+      }
+
+      case "web_search": {
+        const numResults = Math.min(Math.max(args.num_results ?? 5, 1), 10);
+        log("tool", `🔍 searching: ${args.query}`);
+        const searchResults = await scrapeDuckDuckGo(args.query, numResults);
+        return truncateResult(searchResults, name);
       }
 
       default:

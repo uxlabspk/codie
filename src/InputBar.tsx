@@ -11,6 +11,7 @@ const SLASH_COMMANDS = [
   { name: "/sessions", desc: "List saved sessions" },
   { name: "/clear", desc: "Wipe history (keeps system prompt)" },
   { name: "/mode", desc: "Show or set mode: /mode <agent|chat|plan>" },
+  { name: "/design", desc: "Design a project: /design <description>" },
   { name: "/exit", desc: "Save and quit" },
 ];
 

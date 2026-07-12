@@ -14,6 +14,74 @@ import instances from "../node_modules/ink/build/instances.js";
 
 const PLANNING_FILE = "planning.md";
 
+const DESIGN_MODE_PROMPT = `You are in DESIGN MODE. The user has described a project and wants you to create a comprehensive implementation plan.
+
+Follow this workflow exactly:
+
+## Step 1: Analyze Requirements
+Read the user's project description carefully. Identify:
+- Core functionality and features
+- Target platform (web, CLI, mobile, etc.)
+- Any constraints or preferences mentioned
+
+## Step 2: Decide the Tech Stack
+Based on the requirements, choose the best tech stack. For each choice, briefly justify why.
+Consider: languages, frameworks, build tools, databases, deployment.
+
+## Step 3: Search for Best Practices
+Use the web_search tool to research best practices for your chosen stack. Search for:
+- "<chosen framework> best practices <year>"
+- "<chosen stack> project structure conventions"
+- "<chosen framework> architecture patterns"
+
+Do at least 2 web searches to gather real-world guidance.
+
+## Step 4: Write the Plan
+After researching, create a comprehensive plan file at \`plan.md\` using the write_file tool.
+The plan MUST include:
+
+### plan.md Structure:
+\`\`\`
+# Project Plan: <Project Name>
+
+## Tech Stack
+- Language: ...
+- Framework: ...
+- Database: ...
+- Build Tool: ...
+- Deployment: ...
+(Justify each choice briefly)
+
+## Project Structure
+(Directory tree with descriptions)
+
+## Architecture
+(High-level design, patterns, data flow)
+
+## Implementation Phases
+### Phase 1: <Foundation>
+- [ ] Step 1 ...
+- [ ] Step 2 ...
+
+### Phase 2: <Core Features>
+- [ ] ...
+
+### Phase 3: <Polish>
+- [ ] ...
+
+## Best Practices Applied
+(List the best practices found from web searches and how they apply)
+
+## Dependencies
+(List all packages/libraries with versions if known)
+\`\`\`
+
+## Step 5: Present and Ask to Proceed
+After writing plan.md, present a brief summary of the plan and ask:
+"Plan written to plan.md. Ready to proceed with implementation? Say 'go on' to start."
+
+IMPORTANT: Do NOT start implementing yet. Only create the plan. The user will explicitly say "go on" or "proceed" when they want implementation to begin.`;
+
 
 function getSystemPromptForMode(mode: AgentMode): string {
   const basePrompt = `You are a local coding agent running against the user's own model via llama.cpp.
@@ -327,6 +395,36 @@ async function main() {
 
     if (trimmed === "/save-planning") {
       await savePlanningFile();
+      return;
+    }
+
+    if (trimmed.startsWith("/design ")) {
+      const prompt = trimmed.slice(8).trim();
+      if (!prompt) {
+        handle.addEntry("info", "usage: /design <project description>");
+        return;
+      }
+      const designMessage = `/design ${prompt}`;
+      handle.addEntry("user", designMessage);
+      ctxMgr.push({ role: "user", content: designMessage });
+
+      // Inject the design-mode system instructions so the model follows the
+      // structured workflow (decide stack → search → write plan → ask to proceed)
+      ctxMgr.push({
+        role: "system",
+        content: DESIGN_MODE_PROMPT,
+      });
+
+      handle.setBusy(true, "thinking");
+      try {
+        await runAgentTurn(ctxMgr);
+      } catch (err: any) {
+        handle.addEntry("error", `error: ${err.message}`);
+      }
+      handle.setBusy(false);
+
+      await saveSession(opts.session, ctxMgr.getHistory());
+      await refreshStatus();
       return;
     }
 
