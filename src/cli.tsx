@@ -12,7 +12,9 @@ import { App, type AppHandle } from "./App.js";
 import { MODE_ORDER, type AgentMode } from "./uiTypes.js";
 import instances from "../node_modules/ink/build/instances.js";
 
-const DESIGN_MODE_PROMPT = `You are in DESIGN MODE. The user has described a project and wants you to create a comprehensive implementation plan.
+function getDesignModePrompt(sessionName: string): string {
+  const planPath = `.codie/${sessionName}/plan.md`;
+  return `You are in DESIGN MODE. The user has described a project and wants you to create a comprehensive implementation plan.
 
 Follow this workflow exactly:
 
@@ -27,15 +29,15 @@ Based on the requirements, choose the best tech stack. For each choice, briefly 
 Consider: languages, frameworks, build tools, databases, deployment.
 
 ## Step 3: Search for Best Practices
-Use the web_search tool to research best practices for your chosen stack. Search for:
-- "<chosen framework> best practices <year>"
+Use the web_search tool to research best practices for your chosen stack. The current year is ${new Date().getFullYear()}. Search for:
+- "<chosen framework> best practices ${new Date().getFullYear()}"
 - "<chosen stack> project structure conventions"
 - "<chosen framework> architecture patterns"
 
 Do at least 2 web searches to gather real-world guidance.
 
 ## Step 4: Write the Plan
-After researching, create a comprehensive plan file at \`plan.md\` using the write_file tool.
+After researching, create a comprehensive plan file at \`${planPath}\` using the write_file tool.
 The plan MUST include:
 
 ### plan.md Structure:
@@ -75,10 +77,11 @@ The plan MUST include:
 \`\`\`
 
 ## Step 5: Present and Ask to Proceed
-After writing plan.md, present a brief summary of the plan and ask:
-"Plan written to plan.md. Ready to proceed with implementation? Say 'go on' to start."
+After writing the plan, present a brief summary of the plan and ask:
+"Plan written to ${planPath}. Ready to proceed with implementation? Say 'go on' to start."
 
 IMPORTANT: Do NOT start implementing yet. Only create the plan. The user will explicitly say "go on" or "proceed" when they want implementation to begin.`;
+}
 
 
 function getSystemPromptForMode(mode: AgentMode): string {
@@ -377,7 +380,7 @@ async function main() {
       // structured workflow (decide stack → search → write plan → ask to proceed)
       ctxMgr.push({
         role: "system",
-        content: DESIGN_MODE_PROMPT,
+        content: getDesignModePrompt(opts.session),
       });
 
       handle.setBusy(true, "thinking");

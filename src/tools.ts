@@ -459,7 +459,7 @@ export async function executeTool(name: string, argsJson: string, mode: AgentMod
 
       case "web_search": {
         const numResults = Math.min(Math.max(args.num_results ?? 5, 1), 10);
-        log("tool", `🔍 searching: ${args.query}`);
+        log("tool", `searching: ${args.query}`);
         const searchResults = await scrapeDuckDuckGo(args.query, numResults);
         return truncateResult(searchResults, name);
       }
